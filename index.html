@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TP-Link 价格追踪 · Akakçe</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #9aa3b2;
+    --accent: #4fd1c5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .cat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .cat-header {
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .cat-header h2 { font-size: 15px; margin: 0; }
+  .cat-header .count { color: var(--accent); font-size: 12px; }
+  .cat-body { display: none; border-top: 1px solid var(--border); }
+  .cat-body.open { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .price { color: var(--accent); white-space: nowrap; }
+  .status { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  a.src-link { color: var(--muted); font-size: 12px; text-decoration: none; }
+  a.src-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TP-Link 价格追踪面板</h1>
+  <div class="sub">数据来源:Akakçe.com · 每小时自动更新(通过 GitHub Actions)</div>
+  <div class="status" id="status">正在加载数据…</div>
+  <div id="content"></div>
+</div>
+
+<script>
+async function load() {
+  const statusEl = document.getElementById('status');
+  const contentEl = document.getElementById('content');
+  try {
+    const res = await fetch('data/latest.json?_=' + Date.now());
+    if (!res.ok) throw new Error('无法读取数据文件');
+    const data = await res.json();
+
+    const t = new Date(data.timestamp);
+    statusEl.textContent = '最后更新时间:' + t.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) + '(北京时间)';
+
+    contentEl.innerHTML = '';
+    for (const [catName, catData] of Object.entries(data.categories)) {
+      const catDiv = document.createElement('div');
+      catDiv.className = 'cat';
+
+      const header = document.createElement('div');
+      header.className = 'cat-header';
+      header.innerHTML = `
+        <h2>${catName}</h2>
+        <span class="count">${catData.product_count} 条价格 · <a class="src-link" href="${catData.url}" target="_blank" onclick="event.stopPropagation()">查看原页面 →</a></span>
+      `;
+
+      const body = document.createElement('div');
+      body.className = 'cat-body';
+
+      if (catData.products.length === 0) {
+        body.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:13px;">本次未抓取到数据(可能被网站限流,或页面结构已变化,请检查 scraper.py 的选择器)</div>';
+      } else {
+        const rows = catData.products.map(p => `
+          <tr>
+            <td>${p.name}</td>
+            <td class="price">${p.price_text}</td>
+          </tr>
+        `).join('');
+        body.innerHTML = `
+          <table>
+            <thead><tr><th>产品</th><th>价格</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      header.addEventListener('click', () => body.classList.toggle('open'));
+      catDiv.appendChild(header);
+      catDiv.appendChild(body);
+      contentEl.appendChild(catDiv);
+    }
+  } catch (e) {
+    statusEl.textContent = '加载失败:' + e.message + '(可能 data/latest.json 还未生成,请先手动触发一次 Actions)';
+  }
+}
+load();
+</script>
+</body>
+</html>
