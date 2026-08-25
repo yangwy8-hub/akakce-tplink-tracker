@@ -47,6 +47,9 @@ CATEGORIES = {
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
+DEBUG_DIR = Path(__file__).parent / "debug"
+DEBUG_DIR.mkdir(exist_ok=True)
+
 PRICE_RE = re.compile(r"([\d.]+,\d{2})\s*TL")
 
 USER_AGENT = (
@@ -55,7 +58,7 @@ USER_AGENT = (
 )
 
 
-async def fetch_category(page, name: str, url: str) -> list[dict]:
+async def fetch_category(page, name: str, url: str, debug: bool = False) -> list[dict]:
     """打开一个分类页面并提取产品名称 + 最低价格。"""
     products = []
     try:
@@ -65,6 +68,19 @@ async def fetch_category(page, name: str, url: str) -> list[dict]:
 
         # 尝试常见的产品条目容器,失败则退回到整页文本正则提取
         html = await page.content()
+
+        if debug:
+            # 保存调试用的截图和 HTML 源码,方便人工排查页面实际结构
+            safe_name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
+            await page.screenshot(
+                path=str(DEBUG_DIR / f"{safe_name}.png"), full_page=True
+            )
+            (DEBUG_DIR / f"{safe_name}.html").write_text(html, encoding="utf-8")
+            title = await page.title()
+            print(f"  [调试] 页面标题: {title}")
+            print(f"  [调试] HTML 长度: {len(html)} 字符")
+            print(f"  [调试] 页面中 'TL' 出现次数: {html.count('TL')}")
+            print(f"  [调试] 已保存截图/源码到 debug/{safe_name}.png / .html")
 
         # ---- 方案 A:尝试用结构化选择器(可能需要根据实际页面调整)----
         items = await page.query_selector_all("li.js-list-item, li[data-id], article")
@@ -128,9 +144,12 @@ async def main():
         )
         page = await context.new_page()
 
+        first = True
         for name, url in CATEGORIES.items():
             print(f"正在抓取: {name} -> {url}")
-            products = await fetch_category(page, name, url)
+            # 只对第一个类别开启调试(截图+保存HTML),避免产生太多调试文件
+            products = await fetch_category(page, name, url, debug=first)
+            first = False
             print(f"  找到 {len(products)} 条价格信息")
             result["categories"][name] = {
                 "url": url,
